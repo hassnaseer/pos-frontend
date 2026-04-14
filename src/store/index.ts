@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import { authReducer } from "./auth";
 import {
   businessesReducer,
@@ -6,18 +6,22 @@ import {
   roleManagementReducer,
   revenueReportsReducer,
   platformSettingsReducer,
+  permissionsReducer,
 } from "./super-admin";
+
+const superAdminReducer = combineReducers({
+  businesses: businessesReducer,
+  businessTypes: businessTypesReducer,
+  roleManagement: roleManagementReducer,
+  revenueReports: revenueReportsReducer,
+  platformSettings: platformSettingsReducer,
+  permissions: permissionsReducer,
+});
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    superAdmin: {
-      businesses: businessesReducer,
-      businessTypes: businessTypesReducer,
-      roleManagement: roleManagementReducer,
-      revenueReports: revenueReportsReducer,
-      platformSettings: platformSettingsReducer,
-    },
+    superAdmin: superAdminReducer,
   },
 });
 

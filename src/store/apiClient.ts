@@ -1,6 +1,6 @@
 /** Backend API root (Nest global prefix `api/v1`). Override with Vite env in production. */
 export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 const TOKEN_KEY = "pos_access_token";
 

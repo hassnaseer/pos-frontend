@@ -48,10 +48,32 @@ export const fetchPlatformSettings = createAsyncThunk<PlatformSettings[], void, 
         const text = await response.text();
         return thunkAPI.rejectWithValue(text || "Failed to fetch platform settings");
       }
-      const data = (await response.json()) as PlatformSettings[];
+      const json = await response.json();
+      const data = (json?.data ?? json) as PlatformSettings[];
       return data;
     } catch (error) {
       return thunkAPI.rejectWithValue((error as Error).message || "Failed to fetch platform settings");
+    }
+  }
+);
+
+export const savePlatformSettings = createAsyncThunk<PlatformSettings[], PlatformSettings[], { rejectValue: string }>(
+  "superAdmin/savePlatformSettings",
+  async (settings, thunkAPI) => {
+    try {
+      const response = await apiFetch("/super-admin/platform-settings", {
+        method: "PUT",
+        body: JSON.stringify(settings),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        return thunkAPI.rejectWithValue(text || "Failed to save platform settings");
+      }
+      const json = await response.json();
+      const data = (json?.data ?? json) as PlatformSettings[];
+      return data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue((error as Error).message || "Failed to save platform settings");
     }
   }
 );
@@ -79,6 +101,18 @@ export const platformSettingsSlice = createSlice({
       .addCase(fetchPlatformSettings.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload ?? "Failed to load platform settings";
+      })
+      .addCase(savePlatformSettings.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(savePlatformSettings.fulfilled, (state, action) => {
+        state.loading = false;
+        state.settings = action.payload;
+      })
+      .addCase(savePlatformSettings.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload ?? "Failed to save platform settings";
       });
   },
 });

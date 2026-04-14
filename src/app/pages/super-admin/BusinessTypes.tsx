@@ -1,8 +1,6 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
 import {
-  Database, Users, Bell, LogOut, Settings, Building2, Activity,
-  Menu, X, Shield, TrendingUp, Search, Plus, Edit, Trash2, CheckCircle2, XCircle
+  Search, Plus, Edit, Trash2, CheckCircle2, XCircle
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -16,99 +14,98 @@ import {
 } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
-import { Switch } from "../../components/ui/switch";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "../../../store";
+import {
+  fetchBusinessTypes,
+  createBusinessType,
+  updateBusinessType,
+  deleteBusinessTypeAsync,
+  BusinessTypeQueryDto,
+  Permission
+} from "../../../store/super-admin/businessTypesSlice";
+import { fetchPermissions } from "../../../store/super-admin/permissionsSlice";
 
 export default function BusinessTypes() {
   const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
+  const { businessTypes, pagination, loading, error } = useSelector((state: RootState) => state.superAdmin.businessTypes);
+  const { permissions } = useSelector((state: RootState) => state.superAdmin.permissions);
+
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<any>(null);
-
-  const [businessTypes, setBusinessTypes] = useState([
-    {
-      id: "BT-001",
-      name: "Repair Shop",
-      description: "Repair and maintenance services",
-      icon: "🔧",
-      posModule: true,
-      inventoryModule: true,
-      ticketSystem: true,
-      tableManagement: false,
-      appointmentSystem: true,
-      status: "Active",
-      businesses: 156
-    },
-    {
-      id: "BT-002",
-      name: "Factory Industry",
-      description: "Manufacturing and industrial operations",
-      icon: "🏭",
-      posModule: true,
-      inventoryModule: true,
-      ticketSystem: false,
-      tableManagement: false,
-      appointmentSystem: false,
-      status: "Active",
-      businesses: 89
-    },
-    {
-      id: "BT-003",
-      name: "Pharmacy",
-      description: "Medical and pharmaceutical services",
-      icon: "💊",
-      posModule: true,
-      inventoryModule: true,
-      ticketSystem: false,
-      tableManagement: false,
-      appointmentSystem: false,
-      status: "Active",
-      businesses: 234
-    },
-  ]);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    icon: "",
-    posModule: true,
-    inventoryModule: true,
-    ticketSystem: false,
-    tableManagement: false,
-    appointmentSystem: false,
-    status: "Active",
+    active: true,
   });
 
-  const filteredTypes = businessTypes.filter((type) =>
-    type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    type.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const itemsPerPage = 20;
 
-  const handleAddType = () => {
-    const newType = {
-      id: `BT-${String(businessTypes.length + 1).padStart(3, '0')}`,
-      ...formData,
-      businesses: 0
+  useEffect(() => {
+    dispatch(fetchPermissions());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const query: BusinessTypeQueryDto = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchTerm || undefined,
     };
-    setBusinessTypes([...businessTypes, newType]);
-    setIsAddDialogOpen(false);
-    resetForm();
+    dispatch(fetchBusinessTypes(query));
+  }, [dispatch, currentPage, searchTerm]);
+
+  const handleAddType = async () => {
+    try {
+      await dispatch(createBusinessType({
+        name: formData.name,
+        description: formData.description,
+        active: formData.active,
+        permissionIds: selectedPermissions,
+      })).unwrap();
+      setIsAddDialogOpen(false);
+      resetForm();
+      setSelectedPermissions([]);
+    } catch (error) {
+      console.error('Failed to create business type:', error);
+    }
   };
 
-  const handleEditType = () => {
-    setBusinessTypes(businessTypes.map(t =>
-      t.id === selectedType.id ? { ...t, ...formData } : t
-    ));
-    setIsEditDialogOpen(false);
-    resetForm();
+  const handleEditType = async () => {
+    if (!selectedType) return;
+    try {
+      await dispatch(updateBusinessType({
+        id: selectedType.id,
+        data: {
+          name: formData.name,
+          description: formData.description,
+          active: formData.active,
+          permissionIds: selectedPermissions,
+        },
+      })).unwrap();
+      setIsEditDialogOpen(false);
+      resetForm();
+      setSelectedPermissions([]);
+    } catch (error) {
+      console.error('Failed to update business type:', error);
+    }
   };
 
-  const handleDeleteType = () => {
-    setBusinessTypes(businessTypes.filter(t => t.id !== selectedType.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedType(null);
+  const handleDeleteType = async () => {
+    if (!selectedType) return;
+    try {
+      await dispatch(deleteBusinessTypeAsync(selectedType.id)).unwrap();
+      setIsDeleteDialogOpen(false);
+      setSelectedType(null);
+    } catch (error) {
+      console.error('Failed to delete business type:', error);
+    }
   };
 
   const openEditDialog = (type: any) => {
@@ -116,14 +113,9 @@ export default function BusinessTypes() {
     setFormData({
       name: type.name,
       description: type.description,
-      icon: type.icon,
-      posModule: type.posModule,
-      inventoryModule: type.inventoryModule,
-      ticketSystem: type.ticketSystem,
-      tableManagement: type.tableManagement,
-      appointmentSystem: type.appointmentSystem,
-      status: type.status,
+      active: type.active ?? true,
     });
+    setSelectedPermissions((type.permissions || []).map((p: Permission) => p.id));
     setIsEditDialogOpen(true);
   };
 
@@ -136,30 +128,38 @@ export default function BusinessTypes() {
     setFormData({
       name: "",
       description: "",
-      icon: "",
-      posModule: true,
-      inventoryModule: true,
-      ticketSystem: false,
-      tableManagement: false,
-      appointmentSystem: false,
-      status: "Active",
+      active: true,
     });
   };
 
-  const handleLogout = () => {
-    logout();
+  const togglePermission = (permissionId: string) => {
+    setSelectedPermissions(prev =>
+      prev.includes(permissionId)
+        ? prev.filter(id => id !== permissionId)
+        : [...prev, permissionId]
+    );
   };
+
+  const groupedPermissions = permissions.reduce((acc, perm) => {
+    const category = perm.category || 'Other';
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(perm);
+    return acc;
+  }, {} as Record<string, Permission[]>);
 
   return (
     <div className="min-h-screen bg-gray-50">
-     
-
       <div className="flex">
-       
-
         {/* Main Content */}
-        <main className="flex-1 p-6 ">
+        <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto space-y-6">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
@@ -189,72 +189,84 @@ export default function BusinessTypes() {
             </div>
 
             {/* Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTypes.map((type) => (
-                <div key={type.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="text-4xl">{type.icon}</div>
-                      <div>
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-gray-600">Loading business types...</p>
+              </div>
+            )}
+
+            {!loading && businessTypes.length === 0 && (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-gray-600">No business types found</p>
+              </div>
+            )}
+
+            {!loading && businessTypes.length > 0 && (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {businessTypes.map((type) => (
+                  <div key={type.id} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
                         <h3 className="font-bold text-lg">{type.name}</h3>
-                        <p className="text-sm text-gray-500">{type.businesses} businesses</p>
                       </div>
+                      <span className={`px-2 py-1 rounded text-xs ml-2`}>
+                        {type.active ? (
+                          <span className="bg-green-100 text-green-700">Active</span>
+                        ) : (
+                          <span className="bg-gray-100 text-gray-700">Inactive</span>
+                        )}
+                      </span>
                     </div>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      type.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {type.status}
-                    </span>
-                  </div>
 
-                  <p className="text-sm text-gray-600 mb-4">{type.description}</p>
+                    <p className="text-sm text-gray-600 mb-4">{type.description || "No description"}</p>
 
-                  <div className="space-y-2 mb-4 pb-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">POS Module</span>
-                      {type.posModule ? <CheckCircle2 className="size-5 text-green-600" /> : <XCircle className="size-5 text-gray-300" />}
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Inventory</span>
-                      {type.inventoryModule ? <CheckCircle2 className="size-5 text-green-600" /> : <XCircle className="size-5 text-gray-300" />}
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Ticket System</span>
-                      {type.ticketSystem ? <CheckCircle2 className="size-5 text-green-600" /> : <XCircle className="size-5 text-gray-300" />}
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Table Management</span>
-                      {type.tableManagement ? <CheckCircle2 className="size-5 text-green-600" /> : <XCircle className="size-5 text-gray-300" />}
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Appointments</span>
-                      {type.appointmentSystem ? <CheckCircle2 className="size-5 text-green-600" /> : <XCircle className="size-5 text-gray-300" />}
+                    {type.permissions && type.permissions.length > 0 && (
+                      <div className="mb-4 pb-4 border-b border-gray-200">
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2">Permissions ({type.permissions.length})</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {type.permissions.slice(0, 3).map((perm: Permission) => (
+                            <span
+                              key={perm.id}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs"
+                            >
+                              <CheckCircle2 className="size-3" />
+                              {perm.name}
+                            </span>
+                          ))}
+                          {type.permissions.length > 3 && (
+                            <span className="text-xs text-gray-500 px-2 py-1">
+                              +{type.permissions.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => openEditDialog(type)}
+                        disabled={loading}
+                      >
+                        <Edit className="size-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openDeleteDialog(type)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        disabled={loading}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => openEditDialog(type)}
-                    >
-                      <Edit className="size-4 mr-2" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openDeleteDialog(type)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={type.businesses > 0}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </main>
       </div>
@@ -266,23 +278,13 @@ export default function BusinessTypes() {
             <DialogTitle>Add New Business Type</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Retail, Restaurant"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Icon (Emoji)</Label>
-                <Input
-                  value={formData.icon}
-                  onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                  placeholder="🛍️"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Retail, Restaurant"
+              />
             </div>
 
             <div className="space-y-2">
@@ -296,57 +298,44 @@ export default function BusinessTypes() {
             </div>
 
             <div className="space-y-3 pt-4 border-t border-gray-200">
-              <h4 className="font-semibold">Enabled Modules</h4>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="pos">POS Module</Label>
-                <Switch
-                  id="pos"
-                  checked={formData.posModule}
-                  onCheckedChange={(checked) => setFormData({ ...formData, posModule: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="inventory">Inventory Module</Label>
-                <Switch
-                  id="inventory"
-                  checked={formData.inventoryModule}
-                  onCheckedChange={(checked) => setFormData({ ...formData, inventoryModule: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="ticket">Ticket System</Label>
-                <Switch
-                  id="ticket"
-                  checked={formData.ticketSystem}
-                  onCheckedChange={(checked) => setFormData({ ...formData, ticketSystem: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="table">Table Management</Label>
-                <Switch
-                  id="table"
-                  checked={formData.tableManagement}
-                  onCheckedChange={(checked) => setFormData({ ...formData, tableManagement: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="appointment">Appointment System</Label>
-                <Switch
-                  id="appointment"
-                  checked={formData.appointmentSystem}
-                  onCheckedChange={(checked) => setFormData({ ...formData, appointmentSystem: checked })}
-                />
-              </div>
+              <h4 className="font-semibold">Permissions</h4>
+              {Object.entries(groupedPermissions).length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(groupedPermissions).map(([category, perms]) => (
+                    <div key={category}>
+                      <p className="text-xs font-semibold text-gray-600 uppercase mb-2">{category}</p>
+                      <div className="space-y-2">
+                        {perms.map((perm) => (
+                          <div key={perm.id} className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              id={`perm-${perm.id}`}
+                              checked={selectedPermissions.includes(perm.id)}
+                              onChange={() => togglePermission(perm.id)}
+                              className="w-4 h-4 mt-1"
+                            />
+                            <label htmlFor={`perm-${perm.id}`} className="flex-1 cursor-pointer">
+                              <p className="text-sm font-medium">{perm.name}</p>
+                              {perm.description && (
+                                <p className="text-xs text-gray-500">{perm.description}</p>
+                              )}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No permissions available</p>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddType} className="bg-blue-600 hover:bg-blue-700">Add Type</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleAddType} className="bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              {loading ? "Creating..." : "Add Business Type"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -358,21 +347,12 @@ export default function BusinessTypes() {
             <DialogTitle>Edit Business Type</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Icon (Emoji)</Label>
-                <Input
-                  value={formData.icon}
-                  onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">
@@ -385,57 +365,44 @@ export default function BusinessTypes() {
             </div>
 
             <div className="space-y-3 pt-4 border-t border-gray-200">
-              <h4 className="font-semibold">Enabled Modules</h4>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-pos">POS Module</Label>
-                <Switch
-                  id="edit-pos"
-                  checked={formData.posModule}
-                  onCheckedChange={(checked) => setFormData({ ...formData, posModule: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-inventory">Inventory Module</Label>
-                <Switch
-                  id="edit-inventory"
-                  checked={formData.inventoryModule}
-                  onCheckedChange={(checked) => setFormData({ ...formData, inventoryModule: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-ticket">Ticket System</Label>
-                <Switch
-                  id="edit-ticket"
-                  checked={formData.ticketSystem}
-                  onCheckedChange={(checked) => setFormData({ ...formData, ticketSystem: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-table">Table Management</Label>
-                <Switch
-                  id="edit-table"
-                  checked={formData.tableManagement}
-                  onCheckedChange={(checked) => setFormData({ ...formData, tableManagement: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-appointment">Appointment System</Label>
-                <Switch
-                  id="edit-appointment"
-                  checked={formData.appointmentSystem}
-                  onCheckedChange={(checked) => setFormData({ ...formData, appointmentSystem: checked })}
-                />
-              </div>
+              <h4 className="font-semibold">Permissions</h4>
+              {Object.entries(groupedPermissions).length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(groupedPermissions).map(([category, perms]) => (
+                    <div key={category}>
+                      <p className="text-xs font-semibold text-gray-600 uppercase mb-2">{category}</p>
+                      <div className="space-y-2">
+                        {perms.map((perm) => (
+                          <div key={perm.id} className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              id={`edit-perm-${perm.id}`}
+                              checked={selectedPermissions.includes(perm.id)}
+                              onChange={() => togglePermission(perm.id)}
+                              className="w-4 h-4 mt-1"
+                            />
+                            <label htmlFor={`edit-perm-${perm.id}`} className="flex-1 cursor-pointer">
+                              <p className="text-sm font-medium">{perm.name}</p>
+                              {perm.description && (
+                                <p className="text-xs text-gray-500">{perm.description}</p>
+                              )}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">No permissions available</p>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleEditType} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleEditType} className="bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -450,8 +417,10 @@ export default function BusinessTypes() {
             Are you sure you want to delete <strong>{selectedType?.name}</strong>? This action cannot be undone.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteType} className="bg-red-600 hover:bg-red-700">Delete</Button>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleDeleteType} className="bg-red-600 hover:bg-red-700" disabled={loading}>
+              {loading ? "Deleting..." : "Delete"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

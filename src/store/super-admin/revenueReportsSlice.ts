@@ -62,7 +62,8 @@ export const fetchRevenueReports = createAsyncThunk<RevenueReport[], void, { rej
         const text = await response.text();
         return thunkAPI.rejectWithValue(text || "Failed to fetch revenue reports");
       }
-      const data = (await response.json()) as RevenueReport[];
+      const json = await response.json();
+      const data = (json?.data ?? json) as RevenueReport[];
       persistPosData("super-admin", "revenueReports", data);
       return data;
     } catch (error) {

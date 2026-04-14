@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import {
   Database, Users, Bell, LogOut, Settings, Building2, Activity,
@@ -13,35 +13,64 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "../../../store";
+import { fetchBusinessById } from "../../../store/super-admin/businessesSlice";
 
 export default function BusinessDetail() {
   const { id } = useParams();
   const { user, logout } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
+  const { selectedBusiness, loading, error } = useSelector((state: RootState) => state.businesses);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
 
-  // Mock business data - in real app, fetch from API based on id
-  const business = {
-    id: "BUS-001",
-    name: "Tech Retail Store",
-    owner: "John Smith",
-    email: "john@techretail.com",
-    phone: "+1 555-0101",
-    address: "123 Main St, New York, NY 10001",
-    type: "Retail",
-    plan: "Monthly",
-    status: "Active",
-    signupDate: "2024-01-15",
-    expiryDate: "2024-05-15",
-    lastLogin: "2024-04-10 14:23:45",
-    revenue: "$12,450",
-    totalOrders: 1247,
-    totalCustomers: 456,
-    totalProducts: 234,
-    staffCount: 8,
+  useEffect(() => {
+    if (id) {
+      dispatch(fetchBusinessById(id));
+    }
+  }, [dispatch, id]);
+
+  // Extend business object with mock data for UI
+  const extendedBusiness = {
+    ...business,
+    address: "N/A", // Not in API yet
+    lastLogin: "N/A", // Not in API yet
+    totalOrders: 0, // Not in API yet
+    totalCustomers: 0, // Not in API yet
+    totalProducts: 0, // Not in API yet
+    staffCount: 0, // Not in API yet
   };
+
+  const business = extendedBusiness;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading business details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !business) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="size-12 text-red-600 mx-auto" />
+          <p className="mt-4 text-gray-600">{error || "Business not found"}</p>
+          <Link to="/super-admin/businesses">
+            <Button className="mt-4">Back to Businesses</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const subscriptionHistory = [
     { id: 1, date: "2024-04-01", plan: "Monthly", amount: "$35", status: "Paid", method: "Credit Card" },
@@ -167,7 +196,7 @@ export default function BusinessDetail() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Total Orders</p>
-                    <p className="text-xl font-bold">{business.totalOrders}</p>
+                    <p className="text-xl font-bold">{business.totalOrders || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -179,7 +208,7 @@ export default function BusinessDetail() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Customers</p>
-                    <p className="text-xl font-bold">{business.totalCustomers}</p>
+                    <p className="text-xl font-bold">{business.totalCustomers || 'N/A'}</p>
                   </div>
                 </div>
               </div>

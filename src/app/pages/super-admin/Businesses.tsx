@@ -16,20 +16,6 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 
-interface Business {
-  id: string;
-  name: string;
-  owner: string;
-  email: string;
-  phone: string;
-  type: string;
-  plan: string;
-  status: string;
-  signupDate: string;
-  expiryDate: string;
-  revenue: string;
-}
-
 import {
   Dialog,
   DialogContent,
@@ -38,9 +24,23 @@ import {
   DialogFooter,
 } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "../../../store";
+import {
+  fetchBusinesses,
+  createBusiness,
+  updateBusiness,
+  deleteBusinessAsync,
+  BusinessQueryDto
+} from "../../../store/super-admin/businessesSlice";
+import { fetchBusinessTypes } from "../../../store/super-admin/businessTypesSlice";
 
 export default function Businesses() {
   const { user, logout } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
+  const { businesses, pagination, loading, error } = useSelector((state) => state.superAdmin.businesses);
+  const { businessTypes } = useSelector((state) => state.superAdmin.businessTypes);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -48,139 +48,116 @@ export default function Businesses() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedBusiness, setSelectedBusiness] = useState<any>(null);
 
   const itemsPerPage = 20;
 
-  const [businesses, setBusinesses] = useState([
-    {
-      id: "BUS-001",
-      name: "Tech Retail Store",
-      owner: "John Smith",
-      email: "john@techretail.com",
-      phone: "+1 555-0101",
-      type: "Retail",
-      plan: "Monthly",
-      status: "Active",
-      signupDate: "2024-01-15",
-      expiryDate: "2024-02-15",
-      revenue: "$2,450"
-    },
-    {
-      id: "BUS-002",
-      name: "Mike's Repair Shop",
-      owner: "Mike Johnson",
-      email: "mike@repairshop.com",
-      phone: "+1 555-0102",
-      type: "Repair Shop",
-      plan: "Annual",
-      status: "Active",
-      signupDate: "2024-01-10",
-      expiryDate: "2025-01-10",
-      revenue: "$1,890"
-    },
-    {
-      id: "BUS-003",
-      name: "Cafe Central",
-      owner: "Sarah Williams",
-      email: "sarah@cafecentral.com",
-      phone: "+1 555-0103",
-      type: "Restaurant",
-      plan: "Monthly",
-      status: "Trial",
-      signupDate: "2024-04-01",
-      expiryDate: "2024-04-15",
-      revenue: "$0"
-    },
-    {
-      id: "BUS-004",
-      name: "Fashion Boutique",
-      owner: "Emma Davis",
-      email: "emma@fashionboutique.com",
-      phone: "+1 555-0104",
-      type: "Retail",
-      plan: "Monthly",
-      status: "Expired",
-      signupDate: "2023-12-01",
-      expiryDate: "2024-03-01",
-      revenue: "$3,200"
-    },
-    {
-      id: "BUS-005",
-      name: "Auto Service Pro",
-      owner: "David Brown",
-      email: "david@autoservice.com",
-      phone: "+1 555-0105",
-      type: "Services",
-      plan: "Annual",
-      status: "Active",
-      signupDate: "2024-02-20",
-      expiryDate: "2025-02-20",
-      revenue: "$4,100"
-    },
-  ]);
+  useEffect(() => {
+    dispatch(fetchBusinessTypes());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const query: BusinessQueryDto = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchTerm || undefined,
+      type: filterType !== "all" ? filterType : undefined,
+      status: filterStatus !== "all" ? filterStatus : undefined,
+    };
+    dispatch(fetchBusinesses(query));
+  }, [dispatch, currentPage, searchTerm, filterType, filterStatus]);
+
+  const handleSearch = () => {
+    setCurrentPage(1); // Reset to first page when searching
+    const query: BusinessQueryDto = {
+      page: 1,
+      limit: itemsPerPage,
+      search: searchTerm || undefined,
+      type: filterType !== "all" ? filterType : undefined,
+      status: filterStatus !== "all" ? filterStatus : undefined,
+    };
+    dispatch(fetchBusinesses(query));
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const [formData, setFormData] = useState({
     name: "",
-    owner: "",
+    ownerName: "",
     email: "",
     phone: "",
+    businessTypeId: "",
     type: "",
     plan: "Monthly",
     status: "Active",
   });
 
-  const filteredBusinesses = businesses.filter((business) => {
-    const matchesSearch =
-      business.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      business.owner.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      business.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === "all" || business.type === filterType;
-    const matchesStatus = filterStatus === "all" || business.status === filterStatus;
-    return matchesSearch && matchesType && matchesStatus;
-  });
+  const totalPages = pagination?.totalPages || 1;
+  const startIndex = ((pagination?.page || 1) - 1) * (pagination?.limit || itemsPerPage);
+  const paginatedBusinesses = businesses;
 
-  const totalPages = Math.ceil(filteredBusinesses.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedBusinesses = filteredBusinesses.slice(startIndex, startIndex + itemsPerPage);
-
-  const handleAddBusiness = () => {
-    const newBusiness = {
-      id: `BUS-${String(businesses.length + 1).padStart(3, '0')}`,
-      ...formData,
-      signupDate: new Date().toISOString().split('T')[0],
-      expiryDate: formData.plan === "Annual"
-        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      revenue: "$0"
-    };
-    setBusinesses([newBusiness, ...businesses]);
-    setIsAddDialogOpen(false);
-    resetForm();
+  const handleAddBusiness = async () => {
+    try {
+      await dispatch(createBusiness({
+        name: formData.name,
+        ownerName: formData.ownerName,
+        email: formData.email,
+        phone: formData.phone,
+        businessTypeId: formData.businessTypeId || undefined,
+        plan: formData.plan,
+        status: formData.status,
+      })).unwrap();
+      setIsAddDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to create business:', error);
+    }
   };
 
-  const handleEditBusiness = () => {
-    setBusinesses(businesses.map(b =>
-      b.id === selectedBusiness.id ? { ...selectedBusiness, ...formData } : b
-    ));
-    setIsEditDialogOpen(false);
-    resetForm();
+  const handleEditBusiness = async () => {
+    if (!selectedBusiness) return;
+    try {
+      await dispatch(updateBusiness({
+        id: selectedBusiness.id,
+        data: {
+          name: formData.name,
+          ownerName: formData.ownerName,
+          email: formData.email,
+          phone: formData.phone,
+          businessTypeId: formData.businessTypeId || undefined,
+          plan: formData.plan,
+          status: formData.status,
+        },
+      })).unwrap();
+      setIsEditDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to update business:', error);
+    }
   };
 
-  const handleDeleteBusiness = () => {
-    setBusinesses(businesses.filter(b => b.id !== selectedBusiness.id));
-    setIsDeleteDialogOpen(false);
-    setSelectedBusiness(null);
+  const handleDeleteBusiness = async () => {
+    if (!selectedBusiness) return;
+    try {
+      await dispatch(deleteBusinessAsync(selectedBusiness.id)).unwrap();
+      setIsDeleteDialogOpen(false);
+      setSelectedBusiness(null);
+    } catch (error) {
+      console.error('Failed to delete business:', error);
+    }
   };
 
   const openEditDialog = (business: any) => {
     setSelectedBusiness(business);
     setFormData({
       name: business.name,
-      owner: business.owner,
+      ownerName: business.owner,
       email: business.email,
-      phone: business.phone,
+      phone: business.phone || "",
+      businessTypeId: business.businessTypeId || "",
       type: business.type,
       plan: business.plan,
       status: business.status,
@@ -196,9 +173,10 @@ export default function Businesses() {
   const resetForm = () => {
     setFormData({
       name: "",
-      owner: "",
+      ownerName: "",
       email: "",
       phone: "",
+      businessTypeId: "",
       type: "",
       plan: "Monthly",
       status: "Active",
@@ -219,6 +197,13 @@ export default function Businesses() {
         {/* Main Content */}
         <main className="flex-1 p-6 ">
           <div className="max-w-7xl mx-auto space-y-6">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
@@ -244,8 +229,15 @@ export default function Businesses() {
                       placeholder="Search by name, owner, or email..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 pr-20"
                     />
+                    <Button
+                      onClick={handleSearch}
+                      size="sm"
+                      className="absolute right-1 top-1/2 -translate-y-1/2"
+                    >
+                      Search
+                    </Button>
                   </div>
                 </div>
                 <Select value={filterType} onValueChange={setFilterType}>
@@ -254,11 +246,11 @@ export default function Businesses() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="Retail">Retail</SelectItem>
-                    <SelectItem value="Restaurant">Restaurant</SelectItem>
-                    <SelectItem value="Repair Shop">Repair Shop</SelectItem>
-                    <SelectItem value="Services">Services</SelectItem>
-                    <SelectItem value="Hybrid">Hybrid</SelectItem>
+                    {businessTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.name}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -276,7 +268,7 @@ export default function Businesses() {
               </div>
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                 <p className="text-sm text-gray-600">
-                  Showing {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredBusinesses.length)} of {filteredBusinesses.length} businesses
+                  Showing {startIndex + 1} - {Math.min(startIndex + (pagination?.limit || itemsPerPage), pagination?.total || businesses.length)} of {pagination?.total || businesses.length} businesses
                 </p>
                 <Button variant="outline" size="sm">
                   <Download className="size-4 mr-2" />
@@ -287,6 +279,18 @@ export default function Businesses() {
 
             {/* Table */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {loading && (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">Loading businesses...</p>
+                </div>
+              )}
+              {!loading && businesses.length === 0 && (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-gray-600">No businesses found</p>
+                </div>
+              )}
+              {!loading && businesses.length > 0 && (
+                <>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
@@ -378,8 +382,8 @@ export default function Businesses() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => handlePageChange((pagination?.page || 1) - 1)}
+                  disabled={(pagination?.page || 1) === 1}
                 >
                   <ChevronLeft className="size-4 mr-2" />
                   Previous
@@ -388,10 +392,10 @@ export default function Businesses() {
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
                       key={page}
-                      variant={currentPage === page ? "default" : "outline"}
+                      variant={(pagination?.page || 1) === page ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className={currentPage === page ? "bg-blue-600" : ""}
+                      onClick={() => handlePageChange(page)}
+                      className={(pagination?.page || 1) === page ? "bg-blue-600" : ""}
                     >
                       {page}
                     </Button>
@@ -400,13 +404,15 @@ export default function Businesses() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange((pagination?.page || 1) + 1)}
+                  disabled={(pagination?.page || 1) === totalPages}
                 >
                   Next
                   <ChevronRight className="size-4 ml-2" />
                 </Button>
               </div>
+                </>
+              )}
             </div>
           </div>
         </main>
@@ -430,8 +436,8 @@ export default function Businesses() {
             <div className="space-y-2">
               <Label>Owner Name *</Label>
               <Input
-                value={formData.owner}
-                onChange={(e) => setFormData({ ...formData, owner: e.target.value })}
+                value={formData.ownerName}
+                onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
                 placeholder="Enter owner name"
               />
             </div>
@@ -454,16 +460,16 @@ export default function Businesses() {
             </div>
             <div className="space-y-2">
               <Label>Business Type *</Label>
-              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+              <Select value={formData.businessTypeId} onValueChange={(v) => setFormData({ ...formData, businessTypeId: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Retail">Retail</SelectItem>
-                  <SelectItem value="Restaurant">Restaurant</SelectItem>
-                  <SelectItem value="Repair Shop">Repair Shop</SelectItem>
-                  <SelectItem value="Services">Services</SelectItem>
-                  <SelectItem value="Hybrid">Hybrid</SelectItem>
+                  {businessTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -495,8 +501,10 @@ export default function Businesses() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddBusiness} className="bg-blue-600 hover:bg-blue-700">Add Business</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleAddBusiness} className="bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              {loading ? "Creating..." : "Add Business"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -518,8 +526,8 @@ export default function Businesses() {
             <div className="space-y-2">
               <Label>Owner Name *</Label>
               <Input
-                value={formData.owner}
-                onChange={(e) => setFormData({ ...formData, owner: e.target.value })}
+                value={formData.ownerName}
+                onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -539,16 +547,16 @@ export default function Businesses() {
             </div>
             <div className="space-y-2">
               <Label>Business Type *</Label>
-              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+              <Select value={formData.businessTypeId} onValueChange={(v) => setFormData({ ...formData, businessTypeId: v })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Retail">Retail</SelectItem>
-                  <SelectItem value="Restaurant">Restaurant</SelectItem>
-                  <SelectItem value="Repair Shop">Repair Shop</SelectItem>
-                  <SelectItem value="Services">Services</SelectItem>
-                  <SelectItem value="Hybrid">Hybrid</SelectItem>
+                  {businessTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -580,8 +588,10 @@ export default function Businesses() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleEditBusiness} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleEditBusiness} className="bg-blue-600 hover:bg-blue-700" disabled={loading}>
+              {loading ? "Saving..." : "Save Changes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -596,8 +606,10 @@ export default function Businesses() {
             Are you sure you want to delete <strong>{selectedBusiness?.name}</strong>? This action cannot be undone.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleDeleteBusiness} className="bg-red-600 hover:bg-red-700">Delete</Button>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={loading}>Cancel</Button>
+            <Button onClick={handleDeleteBusiness} className="bg-red-600 hover:bg-red-700" disabled={loading}>
+              {loading ? "Deleting..." : "Delete"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
