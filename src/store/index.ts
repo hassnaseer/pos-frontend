@@ -7,6 +7,7 @@ import {
   revenueReportsReducer,
   platformSettingsReducer,
   permissionsReducer,
+  dashboardReducer,
 } from "./super-admin";
 
 const superAdminReducer = combineReducers({
@@ -16,6 +17,7 @@ const superAdminReducer = combineReducers({
   revenueReports: revenueReportsReducer,
   platformSettings: platformSettingsReducer,
   permissions: permissionsReducer,
+  dashboard: dashboardReducer,
 });
 
 export const store = configureStore({

@@ -1,9 +1,7 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useState, useEffect, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
-  Database, Users, Bell, LogOut, Settings, Building2, Activity,
-  Menu, X, Shield, TrendingUp, Save, Server, Cpu, HardDrive,
-  Wifi, CheckCircle2, AlertCircle, RefreshCw
+  Save, RefreshCw
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -11,73 +9,205 @@ import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
 import { Switch } from "../../components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { AppDispatch, RootState } from "../../../store";
+import { fetchPlatformSettings, savePlatformSettings } from "../../../store/super-admin/platformSettingsSlice";
+
+interface PlatformSettings {
+  id: string;
+  settingName: string;
+  value: string | boolean;
+  description: string;
+}
+
+// Default settings template - always shown even if API has no data
+const DEFAULT_SETTINGS: PlatformSettings[] = [
+  {
+    id: "trial_days_business_owner",
+    settingName: "trial_days_business_owner",
+    value: "14",
+    description: "Trial days granted to business owners.",
+  },
+  {
+    id: "trial_days_admin",
+    settingName: "trial_days_admin",
+    value: "14",
+    description: "Trial days granted to business admins.",
+  },
+  {
+    id: "monthly_price",
+    settingName: "monthly_price",
+    value: "35",
+    description: "Monthly subscription price for new businesses.",
+  },
+  {
+    id: "annual_price",
+    settingName: "annual_price",
+    value: "350",
+    description: "Annual subscription price for new businesses.",
+  },
+  {
+    id: "annual_discount_months",
+    settingName: "annual_discount_months",
+    value: "2",
+    description: "Free months included in the annual plan discount.",
+  },
+  {
+    id: "signup_email_subject",
+    settingName: "signup_email_subject",
+    value: "Welcome to Global POS!",
+    description: "Subject line for the welcome signup email.",
+  },
+  {
+    id: "signup_email_body",
+    settingName: "signup_email_body",
+    value: "Thank you for signing up. Your 14-day trial has started.",
+    description: "Body content for the welcome signup email.",
+  },
+  {
+    id: "expiry_warning_subject",
+    settingName: "expiry_warning_subject",
+    value: "Your subscription is expiring soon",
+    description: "Subject line for subscription expiry warning emails.",
+  },
+  {
+    id: "expiry_warning_body",
+    settingName: "expiry_warning_body",
+    value: "Your subscription will expire in {days} days. Please renew to continue using our services.",
+    description: "Body content for the subscription expiry warning email.",
+  },
+  {
+    id: "blocked_email_subject",
+    settingName: "blocked_email_subject",
+    value: "Your account has been suspended",
+    description: "Subject line for blocked account emails.",
+  },
+  {
+    id: "blocked_email_body",
+    settingName: "blocked_email_body",
+    value: "Your account has been suspended due to non-payment. Please contact support.",
+    description: "Body content for blocked account notifications.",
+  },
+  {
+    id: "maintenance_mode",
+    settingName: "maintenance_mode",
+    value: "false",
+    description: "Toggle global maintenance mode for all businesses.",
+  },
+  {
+    id: "announcement_enabled",
+    settingName: "announcement_enabled",
+    value: "false",
+    description: "Enable or disable platform announcement banner.",
+  },
+  {
+    id: "announcement_text",
+    settingName: "announcement_text",
+    value: "",
+    description: "Global announcement text shown to all users when enabled.",
+  },
+  {
+    id: "max_staff_per_business",
+    settingName: "max_staff_per_business",
+    value: "50",
+    description: "Maximum number of staff accounts allowed per business.",
+  },
+  {
+    id: "max_products_per_business",
+    settingName: "max_products_per_business",
+    value: "10000",
+    description: "Maximum number of products allowed per business.",
+  },
+  {
+    id: "max_customers_per_business",
+    settingName: "max_customers_per_business",
+    value: "50000",
+    description: "Maximum number of customer records allowed per business.",
+  },
+];
 
 export default function PlatformSettings() {
-  const [refreshing, setRefreshing] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
+  const { settings, loading } = useSelector((state: RootState) => state.superAdmin.platformSettings);
+  const [localSettings, setLocalSettings] = useState<PlatformSettings[]>(DEFAULT_SETTINGS);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const systemHealth = {
-    database: { status: "healthy", uptime: "99.9%", responseTime: "12ms" },
-    api: { status: "healthy", uptime: "99.8%", responseTime: "45ms" },
-    storage: { status: "healthy", used: "245GB", total: "1TB", percentage: 24 },
-    memory: { status: "healthy", used: "12.4GB", total: "32GB", percentage: 39 },
-    cpu: { status: "healthy", usage: "23%", cores: 16 },
+  useEffect(() => {
+    dispatch(fetchPlatformSettings());
+  }, [dispatch]);
+
+  useEffect(() => {
+    // If we have settings from the API, merge them with defaults
+    // This ensures all fields are always shown
+    if (settings && settings.length > 0) {
+      const settingsMap = new Map(settings.map(s => [s.settingName, s]));
+      const merged = DEFAULT_SETTINGS.map(defaultSetting => 
+        settingsMap.get(defaultSetting.settingName) || defaultSetting
+      );
+      setLocalSettings(merged);
+    } else {
+      // If no API data, use defaults (fields will still show)
+      setLocalSettings(DEFAULT_SETTINGS);
+    }
+  }, [settings]);
+
+  // Group settings by category for easier access
+  const settingsByCategory = useMemo(() => {
+    const grouped = {
+      trial: [] as typeof localSettings,
+      pricing: [] as typeof localSettings,
+      emails: [] as typeof localSettings,
+      system: [] as typeof localSettings,
+      limits: [] as typeof localSettings,
+    };
+
+    localSettings.forEach((setting) => {
+      if (setting.settingName.includes("trial")) grouped.trial.push(setting);
+      else if (setting.settingName.includes("price") || setting.settingName.includes("discount")) grouped.pricing.push(setting);
+      else if (setting.settingName.includes("email")) grouped.emails.push(setting);
+      else if (setting.settingName.includes("maintenance") || setting.settingName === "announcement_enabled") grouped.system.push(setting);
+      else if (setting.settingName.includes("max_")) grouped.limits.push(setting);
+    });
+
+    return grouped;
+  }, [localSettings]);
+
+  const handleSettingChange = (id: string, key: "value" | "description", newValue: string | boolean) => {
+    setLocalSettings((prev) =>
+      prev.map((setting) =>
+        setting.id === id ? { ...setting, [key]: String(newValue) } : setting
+      )
+    );
   };
 
-  const handleRefreshHealth = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await dispatch(savePlatformSettings(localSettings)).unwrap();
+      alert("Settings saved successfully!");
+    } catch (error) {
+      alert("Failed to save settings: " + (error as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const [settings, setSettings] = useState({
-    // Trial & Subscription
-    trialPeriodDays: "14",
-    monthlyPrice: "35",
-    annualPrice: "350",
-    annualDiscount: "2",
-
-    // Email Templates
-    signupEmailSubject: "Welcome to Global POS!",
-    signupEmailBody: "Thank you for signing up. Your 14-day trial has started.",
-    expiryWarningSubject: "Your subscription is expiring soon",
-    expiryWarningBody: "Your subscription will expire in {days} days. Please renew to continue using our services.",
-    blockedEmailSubject: "Your account has been suspended",
-    blockedEmailBody: "Your account has been suspended due to non-payment. Please contact support.",
-
-    // System Settings
-    maintenanceMode: false,
-    announcementEnabled: false,
-    announcementText: "",
-
-    // Business Limits
-    maxStaffPerBusiness: "50",
-    maxProductsPerBusiness: "10000",
-    maxCustomersPerBusiness: "50000",
-  });
-
-  const handleSave = () => {
-    console.log("Saving settings:", settings);
-    // In a real app, this would call an API
-    alert("Settings saved successfully!");
-  };return (
+  return (
     <div className="min-h-screen bg-gray-50">
-
       <div className="flex">
-
-        {/* Main Content */}
-        <main className="flex-1 p-6 ">
+        <main className="flex-1 p-6">
           <div className="max-w-4xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold mb-1">Platform Settings</h2>
-                <p className="text-gray-600">Configure and monitor your platform</p>
+                <p className="text-gray-600">Configure trial periods, pricing, email templates, business limits, and system settings</p>
               </div>
               <div className="flex gap-3">
-                <Button onClick={handleRefreshHealth} variant="outline" disabled={refreshing}>
-                  <RefreshCw className={`size-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                  Refresh Status
+                <Button onClick={() => dispatch(fetchPlatformSettings())} variant="outline" disabled={loading}>
+                  <RefreshCw className={`size-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                  Refresh
                 </Button>
-                <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
+                <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
                   <Save className="size-4 mr-2" />
                   Save Changes
                 </Button>
@@ -90,88 +220,70 @@ export default function PlatformSettings() {
                 <TabsTrigger value="general">General Settings</TabsTrigger>
                 <TabsTrigger value="email">Email Templates</TabsTrigger>
                 <TabsTrigger value="limits">Business Limits</TabsTrigger>
-                <TabsTrigger value="monitoring">System Health</TabsTrigger>
               </TabsList>
 
               {/* General Settings Tab */}
               <TabsContent value="general" className="space-y-6">
-
                 {/* Trial & Subscription Settings */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-lg mb-4">Trial & Subscription</h3>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Trial Period (Days)</Label>
-                  <Input
-                    type="number"
-                    value={settings.trialPeriodDays}
-                    onChange={(e) => setSettings({ ...settings, trialPeriodDays: e.target.value })}
-                  />
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h3 className="font-semibold text-lg mb-4">Trial & Subscription</h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {settingsByCategory.trial.map((setting) => (
+                      <div key={setting.id} className="space-y-2">
+                        <Label>
+                          {setting.settingName === "trial_days_business_owner"
+                            ? "Trial Days - Business Owner"
+                            : "Trial Days - Admin"}
+                        </Label>
+                        <Input
+                          type="number"
+                          value={setting.value}
+                          onChange={(e) => handleSettingChange(setting.id, "value", e.target.value)}
+                        />
+                        {setting.description && <p className="text-xs text-gray-500">{setting.description}</p>}
+                      </div>
+                    ))}
+                    {settingsByCategory.pricing.map((setting) => (
+                      <div key={setting.id} className="space-y-2">
+                        <Label>
+                          {setting.settingName === "monthly_price"
+                            ? "Monthly Price ($)"
+                            : setting.settingName === "annual_price"
+                            ? "Annual Price ($)"
+                            : "Annual Discount (Months Free)"}
+                        </Label>
+                        <Input
+                          type="number"
+                          value={setting.value}
+                          onChange={(e) => handleSettingChange(setting.id, "value", e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Monthly Price ($)</Label>
-                  <Input
-                    type="number"
-                    value={settings.monthlyPrice}
-                    onChange={(e) => setSettings({ ...settings, monthlyPrice: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Annual Price ($)</Label>
-                  <Input
-                    type="number"
-                    value={settings.annualPrice}
-                    onChange={(e) => setSettings({ ...settings, annualPrice: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Annual Discount (Months Free)</Label>
-                  <Input
-                    type="number"
-                    value={settings.annualDiscount}
-                    onChange={(e) => setSettings({ ...settings, annualDiscount: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
 
                 {/* System Settings */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="font-semibold text-lg mb-4">System Settings</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label>Maintenance Mode</Label>
-                        <p className="text-sm text-gray-500">Disable all business logins</p>
-                      </div>
-                      <Switch
-                        checked={settings.maintenanceMode}
-                        onCheckedChange={(checked) => setSettings({ ...settings, maintenanceMode: checked })}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                      <div>
-                        <Label>Global Announcement</Label>
-                        <p className="text-sm text-gray-500">Show banner to all users</p>
-                      </div>
-                      <Switch
-                        checked={settings.announcementEnabled}
-                        onCheckedChange={(checked) => setSettings({ ...settings, announcementEnabled: checked })}
-                      />
-                    </div>
-
-                    {settings.announcementEnabled && (
-                      <div className="space-y-2">
-                        <Label>Announcement Text</Label>
-                        <Textarea
-                          value={settings.announcementText}
-                          onChange={(e) => setSettings({ ...settings, announcementText: e.target.value })}
-                          placeholder="Enter announcement message"
-                          rows={3}
+                    {settingsByCategory.system.map((setting) => (
+                      <div key={setting.id} className="flex items-center justify-between pb-4 border-b border-gray-200 last:border-0 last:pb-0">
+                        <div>
+                          <Label>
+                            {setting.settingName === "maintenance_mode" ? "Maintenance Mode" : "Global Announcement"}
+                          </Label>
+                          <p className="text-sm text-gray-500">
+                            {setting.settingName === "maintenance_mode"
+                              ? "Disable all business logins"
+                              : "Show banner to all users"}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={setting.value === "true"}
+                          onCheckedChange={(checked) => handleSettingChange(setting.id, "value", checked.toString())}
                         />
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </TabsContent>
@@ -180,267 +292,59 @@ export default function PlatformSettings() {
               <TabsContent value="email" className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h3 className="font-semibold text-lg mb-4">Email Notification Templates</h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Signup Email - Subject</Label>
-                  <Input
-                    value={settings.signupEmailSubject}
-                    onChange={(e) => setSettings({ ...settings, signupEmailSubject: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Signup Email - Body</Label>
-                  <Textarea
-                    value={settings.signupEmailBody}
-                    onChange={(e) => setSettings({ ...settings, signupEmailBody: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="space-y-2 pt-4 border-t border-gray-200">
-                  <Label>Expiry Warning - Subject</Label>
-                  <Input
-                    value={settings.expiryWarningSubject}
-                    onChange={(e) => setSettings({ ...settings, expiryWarningSubject: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Expiry Warning - Body</Label>
-                  <Textarea
-                    value={settings.expiryWarningBody}
-                    onChange={(e) => setSettings({ ...settings, expiryWarningBody: e.target.value })}
-                    rows={3}
-                  />
-                  <p className="text-xs text-gray-500">Use {"{days}"} as placeholder for days remaining</p>
-                </div>
-
-                <div className="space-y-2 pt-4 border-t border-gray-200">
-                  <Label>Account Blocked - Subject</Label>
-                  <Input
-                    value={settings.blockedEmailSubject}
-                    onChange={(e) => setSettings({ ...settings, blockedEmailSubject: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Account Blocked - Body</Label>
-                  <Textarea
-                    value={settings.blockedEmailBody}
-                    onChange={(e) => setSettings({ ...settings, blockedEmailBody: e.target.value })}
-                    rows={3}
-                  />
+                  <div className="space-y-6">
+                    {settingsByCategory.emails.map((setting) => (
+                      <div key={setting.id} className="space-y-2 pb-6 border-b border-gray-200 last:border-0 last:pb-0">
+                        <Label className="font-semibold">
+                          {setting.settingName
+                            .replace(/_/g, " ")
+                            .replace(/email|subject|body/gi, (m) => m.toUpperCase())
+                            .split(" ")
+                            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(" ")}
+                        </Label>
+                        {setting.settingName.includes("body") ? (
+                          <Textarea
+                            value={setting.value}
+                            onChange={(e) => handleSettingChange(setting.id, "value", e.target.value)}
+                            rows={3}
+                          />
+                        ) : (
+                          <Input
+                            type="text"
+                            value={setting.value}
+                            onChange={(e) => handleSettingChange(setting.id, "value", e.target.value)}
+                          />
+                        )}
+                        {setting.description && <p className="text-xs text-gray-500">{setting.description}</p>}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
               </TabsContent>
 
               {/* Business Limits Tab */}
               <TabsContent value="limits" className="space-y-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="font-semibold text-lg mb-4">Business Limits</h3>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Max Staff Per Business</Label>
-                  <Input
-                    type="number"
-                    value={settings.maxStaffPerBusiness}
-                    onChange={(e) => setSettings({ ...settings, maxStaffPerBusiness: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Products Per Business</Label>
-                  <Input
-                    type="number"
-                    value={settings.maxProductsPerBusiness}
-                    onChange={(e) => setSettings({ ...settings, maxProductsPerBusiness: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Max Customers Per Business</Label>
-                  <Input
-                    type="number"
-                    value={settings.maxCustomersPerBusiness}
-                    onChange={(e) => setSettings({ ...settings, maxCustomersPerBusiness: e.target.value })}
-                  />
-                  </div>
-                </div>
-              </div>
-              </TabsContent>
-
-              {/* System Monitoring Tab */}
-              <TabsContent value="monitoring" className="space-y-6">
-                {/* Status Overview */}
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-3 bg-green-100 rounded-lg">
-                        <CheckCircle2 className="size-6 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">System Status</p>
-                        <p className="text-xl font-bold text-green-600">All Systems Operational</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-3 bg-blue-100 rounded-lg">
-                        <Server className="size-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Uptime</p>
-                        <p className="text-xl font-bold">99.9%</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-3 bg-purple-100 rounded-lg">
-                        <Wifi className="size-6 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Response Time</p>
-                        <p className="text-xl font-bold">45ms</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Detailed Metrics */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h3 className="font-semibold text-lg mb-6">System Components</h3>
-                  <div className="space-y-6">
-                    {/* Database */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Database className="size-5 text-gray-600" />
-                          <span className="font-semibold">Database</span>
-                        </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                          Healthy
-                        </span>
+                  <h3 className="font-semibold text-lg mb-4">Business Limits</h3>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {settingsByCategory.limits.map((setting) => (
+                      <div key={setting.id} className="space-y-2">
+                        <Label>
+                          {setting.settingName === "max_staff_per_business"
+                            ? "Max Staff Per Business"
+                            : setting.settingName === "max_products_per_business"
+                            ? "Max Products Per Business"
+                            : "Max Customers Per Business"}
+                        </Label>
+                        <Input
+                          type="number"
+                          value={setting.value}
+                          onChange={(e) => handleSettingChange(setting.id, "value", e.target.value)}
+                        />
+                        {setting.description && <p className="text-xs text-gray-500 mt-1">{setting.description}</p>}
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Uptime</p>
-                          <p className="font-semibold">{systemHealth.database.uptime}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Response Time</p>
-                          <p className="font-semibold">{systemHealth.database.responseTime}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Connections</p>
-                          <p className="font-semibold">124 active</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* API Server */}
-                    <div className="pt-6 border-t border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Server className="size-5 text-gray-600" />
-                          <span className="font-semibold">API Server</span>
-                        </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                          Healthy
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Uptime</p>
-                          <p className="font-semibold">{systemHealth.api.uptime}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Response Time</p>
-                          <p className="font-semibold">{systemHealth.api.responseTime}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Requests/min</p>
-                          <p className="font-semibold">2,341</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Storage */}
-                    <div className="pt-6 border-t border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <HardDrive className="size-5 text-gray-600" />
-                          <span className="font-semibold">Storage</span>
-                        </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                          Healthy
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Used: {systemHealth.storage.used} of {systemHealth.storage.total}</span>
-                          <span className="font-semibold">{systemHealth.storage.percentage}%</span>
-                        </div>
-                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-600 rounded-full"
-                            style={{ width: `${systemHealth.storage.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Memory */}
-                    <div className="pt-6 border-t border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Cpu className="size-5 text-gray-600" />
-                          <span className="font-semibold">Memory</span>
-                        </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                          Healthy
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Used: {systemHealth.memory.used} of {systemHealth.memory.total}</span>
-                          <span className="font-semibold">{systemHealth.memory.percentage}%</span>
-                        </div>
-                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-green-600 rounded-full"
-                            style={{ width: `${systemHealth.memory.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* CPU */}
-                    <div className="pt-6 border-t border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Cpu className="size-5 text-gray-600" />
-                          <span className="font-semibold">CPU</span>
-                        </div>
-                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                          Healthy
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Usage</p>
-                          <p className="font-semibold">{systemHealth.cpu.usage}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Cores</p>
-                          <p className="font-semibold">{systemHealth.cpu.cores}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Load Average</p>
-                          <p className="font-semibold">1.2, 1.5, 1.8</p>
-                        </div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </TabsContent>

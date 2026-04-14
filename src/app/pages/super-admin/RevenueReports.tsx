@@ -1,12 +1,15 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
-  Database, Users, Bell, LogOut, Settings, Building2, Activity,
-  Menu, X, Shield, TrendingUp, Calendar, Download, DollarSign,
-  ArrowUp, ArrowDown
+  Calendar,
+  Download,
+  DollarSign,
+  ArrowUp,
+  ArrowDown,
+  TrendingUp,
+  Building2,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { useAuth } from "../../contexts/AuthContext";
 import {
   Select,
   SelectContent,
@@ -14,47 +17,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
+import { AppDispatch, RootState } from "../../../store";
+import { fetchRevenueReports } from "../../../store/super-admin/revenueReportsSlice";
 
 export default function RevenueReports() {
-  const { user, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
+  const { reports, loading } = useSelector((state: RootState) => state.superAdmin.revenueReports);
   const [period, setPeriod] = useState("monthly");
   const [year, setYear] = useState("2024");
   const [compareEnabled, setCompareEnabled] = useState(false);
   const [compareYear, setCompareYear] = useState("2023");
 
-  const monthlyData = [
-    { month: "January", revenue: 32450, businesses: 1180, growth: 12.5 },
-    { month: "February", revenue: 45230, businesses: 1205, growth: 39.4 },
-    { month: "March", revenue: 38890, businesses: 1220, growth: -14.0 },
-    { month: "April", revenue: 52100, businesses: 1247, growth: 34.0 },
-    { month: "May", revenue: 48760, businesses: 1265, growth: -6.4 },
-    { month: "June", revenue: 61340, businesses: 1289, growth: 25.8 },
-    { month: "July", revenue: 55890, businesses: 1298, growth: -8.9 },
-    { month: "August", revenue: 48920, businesses: 1305, growth: -12.5 },
-    { month: "September", revenue: 62450, businesses: 1328, growth: 27.6 },
-    { month: "October", revenue: 58760, businesses: 1342, growth: -5.9 },
-    { month: "November", revenue: 65340, businesses: 1358, growth: 11.2 },
-    { month: "December", revenue: 72890, businesses: 1389, growth: 11.6 },
-  ];
+  useEffect(() => {
+    dispatch(fetchRevenueReports());
+  }, [dispatch]);
 
-  const yearlyData = [
-    { year: "2021", revenue: 285450, businesses: 856, growth: 0 },
-    { year: "2022", revenue: 412340, businesses: 1024, growth: 44.5 },
-    { year: "2023", revenue: 538920, businesses: 1198, growth: 30.7 },
-    { year: "2024", revenue: 643020, businesses: 1389, growth: 19.3 },
-  ];
-
-  const dailyData = Array.from({ length: 30 }, (_, i) => ({
-    day: i + 1,
-    revenue: Math.floor(Math.random() * 5000) + 15000,
-    businesses: 1247 + Math.floor(Math.random() * 20),
-  }));
-
+  // Transform reports data for display
   const getData = () => {
-    if (period === "daily") return dailyData;
-    if (period === "yearly") return yearlyData;
-    return monthlyData;
+    if (!reports || reports.length === 0) return [];
+
+    return reports.map((report) => ({
+      period: report.period,
+      revenue: parseFloat(report.totalRevenue.replace(/[$,]/g, "")) || 0,
+      businesses: report.activeBusinesses,
+      growth: parseFloat(report.growth.replace("%", "")) || 0,
+    }));
   };
 
   const businessTypeRevenue = [
@@ -67,13 +54,13 @@ export default function RevenueReports() {
 
   const currentData = getData();
   const totalRevenue = currentData.reduce((sum, item) => sum + item.revenue, 0);
-  const avgRevenue = totalRevenue / currentData.length;
-  const maxRevenue = Math.max(...currentData.map(d => d.revenue));
-  const minRevenue = Math.min(...currentData.map(d => d.revenue));
+  const avgRevenue = currentData.length > 0 ? totalRevenue / currentData.length : 0;
+  const maxRevenue = currentData.length > 0 ? Math.max(...currentData.map((d) => d.revenue)) : 0;
+  const minRevenue = currentData.length > 0 ? Math.min(...currentData.map((d) => d.revenue)) : 0;
 
-  const handleLogout = () => {
-    logout();
-  };
+  if (loading && reports.length === 0) {
+    return <div className="p-6">Loading revenue reports...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -257,9 +244,7 @@ export default function RevenueReports() {
                 {currentData.map((item, i) => {
                   const maxRevenue = Math.max(...currentData.map(d => d.revenue));
                   const height = (item.revenue / maxRevenue) * 100;
-                  const label = period === "daily" ? item?.day :
-                    period === "yearly" ? item?.year :
-                    item?.month.substring(0, 3);
+                  const label = item.period || "N/A";
 
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-2">
@@ -300,9 +285,7 @@ export default function RevenueReports() {
                     {currentData.map((item, index) => (
                       <tr key={index} className="hover:bg-gray-50 transition">
                         <td className="px-6 py-4 font-medium">
-                          {period === "daily" ? `Day ${item.day}` :
-                            period === "yearly" ? item.year :
-                            item.month}
+                          {item.period || "N/A"}
                         </td>
                         <td className="px-6 py-4">
                           <span className="font-bold text-green-600">

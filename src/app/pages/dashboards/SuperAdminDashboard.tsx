@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
+import { useDispatch, useSelector } from "react-redux";
 import {
   Database, Users, DollarSign, TrendingUp, Bell, LogOut,
   Settings, Building2, Activity, Menu, X, Shield, Plus,
@@ -14,19 +15,60 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
+import { AppDispatch, RootState } from "../../../store";
+import { fetchDashboardSummary } from "../../../store/super-admin/dashboardSlice";
 
 export default function SuperAdminDashboard() {
   const { user, logout } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
+  const { summary, loading } = useSelector((state: RootState) => state.superAdmin.dashboard);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dateRange, setDateRange] = useState("today");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const stats = [
-    { label: "Total Businesses", value: "1,247", icon: Building2, change: "+12%", changeValue: "+134", trend: "up", comparison: "vs last month" },
-    { label: "Active Subscriptions", value: "1,089", icon: Users, change: "+8%", changeValue: "+76", trend: "up", comparison: "vs last month" },
-    { label: "Trial Businesses", value: "158", icon: Activity, change: "-3%", changeValue: "-5", trend: "down", comparison: "vs last month" },
-    { label: "Monthly Revenue", value: "$38,115", icon: DollarSign, change: "+15%", changeValue: "+$4,970", trend: "up", comparison: "vs last month" },
-  ];
+  useEffect(() => {
+    dispatch(fetchDashboardSummary());
+  }, [dispatch]);
+
+  // Calculate stats from summary data
+  const stats = summary ? [
+    {
+      label: "Total Businesses",
+      value: summary.totalBusinesses.toLocaleString(),
+      icon: Building2,
+      change: summary.latestReport?.growth || "+0%",
+      changeValue: `+${summary.latestReport?.newBusinesses || 0}`,
+      trend: (summary.latestReport?.growth?.startsWith('+') ? "up" : "down") as "up" | "down",
+      comparison: "vs last period"
+    },
+    {
+      label: "Active Subscriptions",
+      value: summary.activeSubscriptions.toLocaleString(),
+      icon: Users,
+      change: "+8%",
+      changeValue: "+76",
+      trend: "up" as const,
+      comparison: "vs last month"
+    },
+    {
+      label: "Trial Businesses",
+      value: summary.trialBusinesses.toLocaleString(),
+      icon: Activity,
+      change: "-3%",
+      changeValue: "-5",
+      trend: "down" as const,
+      comparison: "vs last month"
+    },
+    {
+      label: "Total Revenue",
+      value: `$${summary.totalRevenue}`,
+      icon: DollarSign,
+      change: summary.latestReport?.growth || "+0%",
+      changeValue: summary.latestReport?.totalRevenue || "$0",
+      trend: (summary.latestReport?.growth?.startsWith('+') ? "up" : "down") as "up" | "down",
+      comparison: "vs last period"
+    },
+  ] : [];
 
   const recentActivity = [
     { id: 1, business: "Tech Retail Store", action: "New signup", time: "5 min ago", type: "signup" },
@@ -39,6 +81,10 @@ export default function SuperAdminDashboard() {
   const handleLogout = () => {
     logout();
   };
+
+  if (loading && !summary) {
+    return <div className="p-6">Loading dashboard...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -4,6 +4,7 @@ export { default as roleManagementReducer } from "./roleManagementSlice";
 export { default as revenueReportsReducer } from "./revenueReportsSlice";
 export { default as platformSettingsReducer } from "./platformSettingsSlice";
 export { default as permissionsReducer } from "./permissionsSlice";
+export { default as dashboardReducer } from "./dashboardSlice";
 
 export * from "./businessesSlice";
 export * from "./businessTypesSlice";
@@ -11,3 +12,4 @@ export * from "./roleManagementSlice";
 export * from "./revenueReportsSlice";
 export * from "./platformSettingsSlice";
 export * from "./permissionsSlice";
+export * from "./dashboardSlice";
